@@ -1,5 +1,39 @@
 # laooOS — Building an Experimental Linux System (GCC PROFILE)
 
+### 1.0 Host Compiler
+
+> **NOTE:** laooOS can be bootstrapped from either **GCC** or **LLVM/Clang** on the host.
+>
+> The host compiler is only used to start the bootstrap process. It does not determine which compiler the final laooOS system uses.
+>
+> The two main paths are:
+>
+> ```text
+> GCC host
+>     ↓
+> GCC bridge
+>     ↓
+> GCC native
+> ```
+>
+> or:
+>
+> ```text
+> Clang host
+>     ↓
+> Clang bridge
+>     ↓
+> Clang native
+> ```
+>
+> A GCC host can therefore build the LLVM-based laooOS profile, and a Clang host can be used to bootstrap the GCC-based profile, provided the required target toolchain is configured correctly.
+>
+> For the GCC laooOS profile, GCC is ultimately used as the native compiler.
+>
+> For the Mainstream laooOS profile, LLVM/Clang is ultimately used as the native compiler.
+>
+> The host compiler is simply the first tool used to cross the gap from the existing Linux system to the laooOS toolchain.
+
 > An experimental Linux system built from source.
 >
 > Keep it small. Make it fast. Break things. Fix them. Repeat.

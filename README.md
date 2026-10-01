@@ -1,4 +1,4 @@
-# laooOS — Building an Experimental Linux System
+# laooOS — Building an Experimental Linux System (GCC PROFILE)
 
 > An experimental Linux system built from source.
 >

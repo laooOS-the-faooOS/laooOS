@@ -69,8 +69,6 @@
 
 # laooOS — Content Table
 
-=========================
-
 ## I. Introduction
 
 ### 1. What is laooOS?

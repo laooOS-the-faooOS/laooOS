@@ -806,19 +806,530 @@ laooOS stays inside $LFS
 
 # III. Building the Bootstrap System
 
-## 5. The Bootstrap Toolchain
+# 5. The Bootstrap Toolchain
 
-### 5.1 Why a bootstrap toolchain?
+---
 
-### 5.2 Bootstrap compiler
+The bootstrap toolchain is the first toolchain built for laooOS.
 
-### 5.3 Bootstrap binutils
+Its purpose is to create a compiler that:
 
-### 5.4 Bootstrap linker
+```text
+runs on:
+    host Linux / glibc
 
-### 5.5 Bootstrap libc
+produces binaries for:
+    x86_64-laoo-linux-musl
+```
 
-### 5.6 Building a temporary compiler
+The bridge is temporary. It gets us from the host environment to a Musl-based, increasingly self-hosting laooOS environment.
+
+The bootstrap order is:
+
+```text
+Linux kernel headers
+        ↓
+      Musl
+        ↓
+    Binutils
+     (bridge)
+        ↓
+      GCC
+     (bridge)
+        ↓
+    libstdc++
+     (bridge)
+```
+
+---
+
+## 5.1 Linux Kernel Headers
+
+The kernel headers provide the userspace API exposed by Linux.
+
+Download the current stable Linux source into `$LFS/sources` and extract it:
+
+```text
+--------------------------------
+$ cd "$LFS/sources"
+$ tar -xf linux-<version>.tar.xz
+$ cd linux-<version>
+--------------------------------
+```
+
+Clean the source tree:
+
+```text
+--------------------------------
+$ make mrproper
+--------------------------------
+```
+
+Install the exported userspace headers:
+
+```text
+--------------------------------
+$ make headers_install INSTALL_HDR_PATH="$LFS/usr"
+--------------------------------
+```
+
+This installs the headers into:
+
+```text
+$LFS/usr/include
+```
+
+We do not build the kernel yet.
+
+---
+
+## 5.2 Musl
+
+Musl is the target C library.
+
+The bridge compiler will eventually use these headers, startup files, and libraries when producing target programs.
+
+Enter the Musl source tree:
+
+```text
+--------------------------------
+$ cd "$LFS/sources/musl-<version>"
+--------------------------------
+```
+
+Configure Musl:
+
+```text
+--------------------------------
+$ ./configure --prefix=/usr --target="$LFS_TGT"
+--------------------------------
+```
+
+### Configure flags
+
+`--prefix=/usr`
+
+Installs Musl as if `/usr` is the root of the target system.
+
+Because we use `DESTDIR="$LFS"` during installation, the actual installation goes into:
+
+```text
+$LFS/usr
+```
+
+`--target="$LFS_TGT"`
+
+Selects the target architecture and ABI.
+
+For laooOS:
+
+```text
+x86_64-laoo-linux-musl
+```
+
+The exact target triplet is less important than the fact that it describes our x86_64 Musl target.
+
+Build and install:
+
+```text
+--------------------------------
+$ make -j"$(nproc)"
+$ make DESTDIR="$LFS" install
+--------------------------------
+```
+
+The target dynamic linker will be installed as:
+
+```text
+/lib/ld-musl-x86_64.so.1
+```
+
+---
+
+## 5.3 Binutils Bridge
+
+Binutils provides the assembler, linker and object-file utilities needed by GCC.
+
+Create a separate build directory:
+
+```text
+--------------------------------
+$ cd "$LFS/sources/binutils-<version>"
+$ mkdir -pv build-bridge
+$ cd build-bridge
+--------------------------------
+```
+
+Configure:
+
+```text
+--------------------------------
+$ ../configure --prefix="$LFS/tools" --target="$LFS_TGT" --with-sysroot="$LFS" --disable-nls --disable-werror --disable-gprofng
+--------------------------------
+```
+
+### Configure flags
+
+`--prefix="$LFS/tools"`
+
+Installs the bridge tools into the temporary toolchain directory:
+
+```text
+$LFS/tools
+```
+
+This keeps bootstrap tools separate from both the host and final system.
+
+`--target="$LFS_TGT"`
+
+Tells Binutils that its target is:
+
+```text
+x86_64-laoo-linux-musl
+```
+
+This produces tools such as:
+
+```text
+x86_64-laoo-linux-musl-as
+x86_64-laoo-linux-musl-ld
+x86_64-laoo-linux-musl-ar
+```
+
+These programs still **run on the host**.
+
+`--with-sysroot="$LFS"`
+
+Tells the target tools that:
+
+```text
+$LFS
+```
+
+is the root of the target filesystem.
+
+When GCC asks the linker to find target headers or libraries, the tools can therefore search inside:
+
+```text
+$LFS/usr/include
+$LFS/usr/lib
+$LFS/lib
+```
+
+instead of accidentally using host libraries.
+
+This is one of the most important options in the bridge.
+
+`--disable-nls`
+
+Disables Native Language Support in Binutils.
+
+This removes unnecessary translation infrastructure from the bootstrap tools and keeps the bootstrap smaller.
+
+`--disable-werror`
+
+Prevents warnings from being treated as fatal errors.
+
+Bootstrap builds should be tolerant of compiler warnings because the host compiler may differ from the compiler expected by the upstream project.
+
+`--disable-gprofng`
+
+Disables Gprofng, the GNU profiling component of Binutils.
+
+The bootstrap linker/assembler does not need it.
+
+Build and install:
+
+```text
+--------------------------------
+$ make -j"$(nproc)"
+$ make install
+--------------------------------
+```
+
+---
+
+## 5.4 GCC Bridge
+
+Now we build GCC.
+
+The important concept is:
+
+```text
+GCC executable:
+    host / glibc
+
+GCC output:
+    x86_64-laoo-linux-musl
+```
+
+Create the build directory:
+
+```text
+--------------------------------
+$ cd "$LFS/sources/gcc-<version>"
+$ mkdir -pv build-bridge
+$ cd build-bridge
+--------------------------------
+```
+
+Configure the first C compiler:
+
+```text
+--------------------------------
+$ ../configure --target="$LFS_TGT" --prefix="$LFS/tools" --with-sysroot="$LFS" --disable-nls --disable-shared --disable-multilib --disable-decimal-float --disable-threads --disable-libatomic --disable-libgomp --disable-libquadmath --disable-libssp --disable-libvtv --disable-libsanitizer --disable-libstdcxx --enable-languages=c
+--------------------------------
+```
+
+### Configure flags
+
+`--target="$LFS_TGT"`
+
+Sets the compiler's target:
+
+```text
+x86_64-laoo-linux-musl
+```
+
+The resulting compiler is therefore a cross compiler rather than a compiler for the host's normal glibc environment.
+
+`--prefix="$LFS/tools"`
+
+Installs the temporary GCC into:
+
+```text
+$LFS/tools
+```
+
+The bridge compiler is intentionally kept separate from the eventual compiler installed in the final system.
+
+`--with-sysroot="$LFS"`
+
+Makes `$LFS` the target filesystem root.
+
+This is what lets GCC find the Musl environment we have just created.
+
+Instead of accidentally finding:
+
+```text
+/usr/include
+/usr/lib
+```
+
+from the host, target searches can resolve inside:
+
+```text
+$LFS/usr/include
+$LFS/usr/lib
+```
+
+`--disable-nls`
+
+Disables GCC's translation infrastructure.
+
+The compiler does not need localized diagnostic messages during bootstrap.
+
+`--disable-shared`
+
+Avoids building shared GCC components for the bootstrap compiler.
+
+The bridge only needs enough compiler functionality to continue constructing the target system.
+
+`--disable-multilib`
+
+Builds only the primary target architecture.
+
+For our x86_64 build, we do not need additional 32-bit or alternate ABI libraries.
+
+This reduces build time and complexity.
+
+`--disable-decimal-float`
+
+Disables GCC's decimal floating-point support.
+
+This is not required for the initial C bootstrap compiler.
+
+`--disable-threads`
+
+Disables GCC thread runtime support during the initial bootstrap.
+
+Thread support can be added when building the proper target compiler.
+
+`--disable-libatomic`
+
+Does not build GCC's `libatomic` runtime during the minimal bootstrap.
+
+`--disable-libgomp`
+
+Does not build the OpenMP runtime.
+
+OpenMP is not required to create the initial target compiler.
+
+`--disable-libquadmath`
+
+Does not build GCC's extended-precision floating-point runtime.
+
+`--disable-libssp`
+
+Does not build GCC's stack-smashing-protection runtime library as a separate bootstrap component.
+
+`--disable-libvtv`
+
+Disables GCC's virtual table verification runtime.
+
+It is not needed for the initial C compiler.
+
+`--disable-libsanitizer`
+
+Disables GCC's sanitizer runtimes.
+
+AddressSanitizer, UndefinedBehaviorSanitizer and related runtimes are useful later, but they are unnecessary for bootstrapping.
+
+`--disable-libstdcxx`
+
+Do not build the C++ standard library as part of the initial compiler stage.
+
+We build target libstdc++ separately once the C compiler and Musl environment are working.
+
+`--enable-languages=c`
+
+Build only the C compiler.
+
+C is enough to bootstrap the initial target environment.
+
+This keeps the first GCC build significantly smaller than building the complete GCC language suite.
+
+---
+
+## 5.5 Building GCC
+
+Build the bridge:
+
+```text
+--------------------------------
+$ make -j"$(nproc)"
+$ make install
+--------------------------------
+```
+
+Check the compiler:
+
+```text
+--------------------------------
+$ "$LFS/tools/bin/$LFS_TGT-gcc" --version
+--------------------------------
+```
+
+Check its target:
+
+```text
+--------------------------------
+$ "$LFS/tools/bin/$LFS_TGT-gcc" -v
+--------------------------------
+```
+
+The important result is that GCC reports:
+
+```text
+Target: x86_64-laoo-linux-musl
+```
+
+The compiler itself is still a host executable.
+
+That is exactly what we want at this stage.
+
+---
+
+## 5.6 libstdc++ Bridge
+
+Once the bridge C compiler exists, we can build the C++ standard library for the target.
+
+The build process still executes on the host, but the resulting library belongs to:
+
+```text
+x86_64-laoo-linux-musl
+```
+
+From the GCC build directory:
+
+```text
+--------------------------------
+$ cd "$LFS/sources/gcc-<version>/build-bridge"
+$ make -j"$(nproc)" all-target-libstdc++-v3
+--------------------------------
+```
+
+Install it:
+
+```text
+--------------------------------
+$ make install-target-libstdc++-v3
+--------------------------------
+```
+
+The important distinction is:
+
+```text
+host
+ └── executes the build
+
+bridge GCC
+ └── runs on host
+ └── generates Musl target code
+
+libstdc++
+ └── is target code
+ └── belongs to x86_64-laoo-linux-musl
+```
+
+---
+
+## 5.7 What the Bridge Gives Us
+
+After these stages, we have the basic bootstrap environment:
+
+```text
+                    HOST
+             Linux + glibc
+                    │
+                    │ executes
+                    ▼
+             ┌──────────────┐
+             │   Binutils   │
+             │    bridge    │
+             └──────┬───────┘
+                    │
+                    ▼
+             ┌──────────────┐
+             │  GCC bridge  │
+             │     C        │
+             └──────┬───────┘
+                    │
+                    ▼
+              Musl target
+                    │
+                    ▼
+             target libstdc++
+```
+
+The bridge has two different identities:
+
+```text
+Execution environment:
+    host / glibc
+
+Compilation environment:
+    x86_64-laoo-linux-musl
+```
+
+That distinction is the entire point of this bootstrap stage.
+
+The host gives us something that can execute.
+
+The bridge gives us something that can **build for Musl**.
+
+Later stages progressively replace the host dependencies until laooOS can build itself.
+
 
 ---
 

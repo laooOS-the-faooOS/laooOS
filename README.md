@@ -70,9 +70,9 @@
 ::
 
 
-##laooOS is an experimental Linux system built from source.
+## laooOS is an experimental Linux system built from source.
 
-###The project is not trying to be another giant Linux distribution.
+### The project is not trying to be another giant Linux distribution.
 
 Instead, it is a place to experiment with:
 

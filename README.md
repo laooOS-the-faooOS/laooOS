@@ -4,46 +4,37 @@
 >
 > Keep it small. Make it fast. Break things. Fix them. Repeat.
 
----
+> **NOTE — Using distcc**
+>
+> If you have another machine available, this is a good point to use **distcc** to speed up the native toolchain build.
+>
+> Distcc can distribute compilation jobs to other machines while the main machine handles the build.
+>
+> Make sure the remote machines use a compatible compiler, target architecture, headers, and build environment. Distributed compilation does **not** replace the local linker or target sysroot, so the target environment still needs to be correctly configured on the main build machine.
+>
+> For example:
+>
+> ```text
+> --------------------------------
+> $ export DISTCC_HOSTS="localhost 192.168.1.20 192.168.1.21"
+> --------------------------------
+> ```
+>
+> Then use distcc as the compiler wrapper:
+>
+> ```text
+> --------------------------------
+> $ export CC="distcc gcc"
+> $ export CXX="distcc g++"
+> --------------------------------
+> ```
+>
+> The exact setup depends on the machines being used. If the remote machines are not configured for the same target environment, do not distribute the build.
+>
+> **For laooOS, distcc is optional.** The native toolchain can be built entirely on the main machine.
 
-# Table of Contents
+::
 
-* [Preface](#preface)
-* [I. Introduction](#i-introduction)
-
-  * [1. What is laooOS?](#1-what-is-laooos)
-  * [2. The Three laooOSes](#2-the-three-laoooses)
-  * [3. One Thing All laooOS Builds Have in Common](#3-one-thing-all-laooos-builds-have-in-common)
-  * [4. Why Mold?](#4-why-mold)
-  * [5. Optimization](#5-optimization)
-  * [6. Musl](#6-musl)
-  * [7. Build It Yourself](#7-build-it-yourself)
-  * [8. Experimental by Design](#8-experimental-by-design)
-  * [9. The Three Directions](#9-the-three-directions)
-  * [10. The laooOS Idea](#10-the-laooos-idea)
-* [II. Before the Build](#ii-before-the-build)
-
-  * [2. Preparing the Host](#2-preparing-the-host)
-  * [3. Creating the Build Environment](#3-creating-the-build-environment)
-  * [4. Getting the Sources](#4-getting-the-sources)
-* [III. Building the Bootstrap System](#iii-building-the-bootstrap-system)
-* [IV. The Core Toolchain](#iv-the-core-toolchain)
-* [V. The C Library](#v-the-c-library)
-* [VI. Building the Base System](#vi-building-the-base-system)
-* [VII. The laooOS System](#vii-the-laooos-system)
-* [VIII. Optimization](#viii-optimization)
-* [IX. Mainstream laooOS](#ix-mainstream-laooos)
-* [X. GCC laooOS](#x-gcc-laooos)
-* [XI. Tiny laooOS](#xi-tiny-laooos)
-* [XII. Testing](#xii-testing)
-* [XIII. Experiments](#xiii-experiments)
-* [XIV. Building the Final System](#xiv-building-the-final-system)
-* [XV. Beyond the Base System](#xv-beyond-the-base-system)
-* [Appendices](#appendices)
-
----
-
-# Preface
 
 laooOS is an experimental Linux system built from source.
 

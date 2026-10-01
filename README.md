@@ -1,6 +1,73 @@
 # laooOS — Building an Experimental Linux System (GCC PROFILE)
 
-### 1.0 Host Compiler
+## ⚠️ Optimization Warning
+
+laooOS uses aggressive compiler and linker optimization.
+
+Flags such as `-O3`, `-Ofast`, CPU-specific tuning, aggressive inlining, vectorization, loop transformations, LTO, PGO, and other optimization options can significantly change build time, binary size, performance, and compatibility.
+
+**Do not assume that more optimization is always better.**
+
+Aggressive optimization may:
+
+* Make compilation significantly slower.
+* Increase memory usage during builds.
+* Produce larger binaries.
+* Expose compiler or package bugs.
+* Break code that relies on undefined or implementation-dependent behavior.
+* Reduce performance on workloads that do not benefit from the selected optimizations.
+* Make binaries less portable to other CPUs.
+* Make debugging harder.
+* Cause LTO or PGO builds to fail when packages are not prepared for them.
+
+Optimization flags should therefore be introduced **incrementally** and tested after each change.
+
+The default build should remain known-good before experimental optimization is enabled. If an optimized build breaks, remove the experimental flags and rebuild before assuming the package itself is broken.
+
+CPU-specific options are especially important: a binary optimized for one CPU may not run correctly on another CPU.
+
+**Build it correctly first. Optimize it second. Measure it third.**
+
+laooOS is an experimental system. Optimization is part of the experiment, not a guarantee of better performance.
+
+> **NOTE — No Optimization and `-Os` Builds**
+>
+> Not every laooOS build needs aggressive optimization.
+>
+> For debugging, bootstrapping, troubleshooting, or comparing performance, it can be useful to build packages with **no optimization**:
+>
+> ```text
+> --------------------------------
+> $ export CFLAGS="-O0 -pipe"
+> $ export CXXFLAGS="$CFLAGS"
+> --------------------------------
+> ```
+>
+> `-O0` keeps optimization disabled and can make compiler errors, debugging, and problematic packages easier to investigate.
+>
+> For systems where **binary size** matters more than maximum performance, use `-Os`:
+>
+> ```text
+> --------------------------------
+> $ export CFLAGS="-Os -pipe"
+> $ export CXXFLAGS="$CFLAGS"
+> --------------------------------
+> ```
+>
+> `-Os` enables optimization while prioritizing smaller binaries. This can be useful for **Tiny laooOS**, embedded-style builds, small userspace components, or packages where reducing disk and memory footprint is more important than maximum throughput.
+>
+> The optimization profiles can therefore be thought of as:
+>
+> ```text
+> -O0   → debugging / troubleshooting
+> -O2   → balanced optimization
+> -O3   → aggressive performance optimization
+> -Ofast → maximum aggressive optimization
+> -Os   → optimized for smaller binaries
+> ```
+>
+> Start with a working build, then experiment with optimization. Measure the result instead of assuming a higher optimization level is faster.
+
 
 > **NOTE:** laooOS can be bootstrapped from either **GCC** or **LLVM/Clang** on the host.
 >

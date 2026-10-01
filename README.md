@@ -67,7 +67,72 @@
 >
 > **For laooOS, distcc is optional.** The native toolchain can be built entirely on the main machine.
 
-::
+# laooOS — Content Table
+
+=========================
+
+## I. Introduction
+
+### 1. What is laooOS?
+
+* 1.1 The idea behind laooOS
+* 1.2 The three laooOSes
+
+  * 1.2.1 Mainstream laooOS
+  * 1.2.2 GCC laooOS
+  * 1.2.3 Tiny laooOS
+* 1.3 One Thing All laooOS Builds Have in Common
+* 1.4 Why Mold?
+* 1.5 Optimization
+* 1.6 Musl
+* 1.7 Build It Yourself
+* 1.8 Experimental by Design
+* 1.9 The Three Directions
+* 1.10 The laooOS Idea
+
+## II. Before the Build
+
+### 2. Preparing the Host
+
+* 2.1 Host system requirements
+* 2.2 Required packages
+* 2.3 Disk space
+* 2.4 Memory requirements
+* 2.5 CPU considerations
+
+### 3. Creating the Build Environment
+
+* 3.1 Creating `$LFS`
+* 3.2 Creating the sources directory
+* 3.3 Creating the build user
+* 3.4 Setting ownership
+* 3.5 Setting environment variables
+* 3.6 Setting PATH
+* 3.7 Build flags
+
+### 4. Getting the Sources
+
+* 4.1 Source mirrors
+* 4.2 Downloading with aria2c
+* 4.3 Source checksums
+* 4.4 Extracting sources
+* 4.5 Keeping the source tree clean
+
+## III. Building the Bootstrap System
+
+### 5. The Bootstrap Toolchain
+
+* 5.1 Linux Kernel Headers
+* 5.2 Musl
+* 5.3 Binutils Bridge
+* 5.4 GCC Bridge
+* 5.5 Building GCC
+* 5.6 libstdc++ Bridge
+* 5.7 What the Bridge Gives Us
+
+## IV. Building the Native Toolchain
+
+###
 
 
 ## laooOS is an experimental Linux system built from source.

@@ -831,6 +831,48 @@ laooOS stays inside $LFS
 
 # III. Building the Bootstrap System
 
+> **NOTE:** laooOS uses **Mold** as its primary linker because fast linking is important when building a system from source.
+>
+> The main linker options are:
+>
+> ```text
+> Mold
+>     ↓
+> primary laooOS linker
+> ```
+>
+> Other linkers may still be used when required:
+>
+> ```text
+> GNU ld.bfd
+> GNU gold
+> LLVM lld
+> Mold
+> ```
+>
+> The bootstrap environment may initially use the linker provided by the host or bootstrap Binutils. Mold can be introduced once its dependencies and target environment are available.
+>
+> The choice of linker is independent of the compiler:
+>
+> ```text
+> GCC    ──┐
+>         ├──→ linker
+> Clang  ──┘
+> ```
+>
+> For example:
+>
+> ```text
+> GCC   + Mold
+> Clang + Mold
+> Clang + LLD
+> GCC   + ld.bfd
+> ```
+>
+> The standard laooOS configuration uses **Mold**, but the build should not assume that every stage can use it immediately. During bootstrap, use whatever linker is available and switch to Mold when the target environment is ready.
+> ::
+
+
 # 5. The Bootstrap Toolchain
 
 ---

@@ -1333,19 +1333,554 @@ Later stages progressively replace the host dependencies until laooOS can build 
 
 ---
 
-## 6. The Bootstrap Environment
+## 6. The native toolchain
 
-### 6.1 Host compiler
+---
 
-### 6.2 Target compiler
+The bootstrap stage gave us a working bridge:
 
-### 6.3 Target architecture
+```text
+host / glibc
+      │
+      ▼
+bridge GCC + Binutils
+      │
+      ▼
+x86_64-laoo-linux-musl
+```
 
-### 6.4 Target triplet
+The bridge is not the final toolchain.
 
-### 6.5 Glibc host / Musl target
+It exists so that we can use host-executable tools to build the actual Musl toolchain.
 
-### 6.6 Entering the target environment
+This stage turns the bridge into the target toolchain.
+
+---
+
+## 6.1 Host Compiler
+
+The host compiler is the compiler provided by the system used to build laooOS.
+
+For example:
+
+```text
+host:
+    x86_64
+    Linux
+    glibc
+    host GCC
+```
+
+The host compiler builds the initial bootstrap components.
+
+It is not intended to become the final laooOS compiler.
+
+The important distinction is:
+
+```text
+host compiler
+    ↓
+builds bridge tools
+
+bridge tools
+    ↓
+build target toolchain
+```
+
+The host is therefore only the starting point.
+
+---
+
+## 6.2 Target Compiler
+
+The target compiler is the compiler that produces binaries for laooOS.
+
+Our target is:
+
+```text
+x86_64-laoo-linux-musl
+```
+
+During bootstrap, the first target compiler is the bridge GCC.
+
+It runs on the host:
+
+```text
+host / glibc
+```
+
+but produces programs for:
+
+```text
+x86_64 / Linux / Musl
+```
+
+We then use that bridge compiler to build the real target GCC.
+
+The progression is:
+
+```text
+host GCC
+    ↓
+bridge GCC
+    ↓
+native Musl GCC
+```
+
+The final compiler will support:
+
+```text
+C
+C++
+```
+
+and will be used to build the rest of laooOS.
+
+---
+
+## 6.3 Target Architecture
+
+laooOS currently targets:
+
+```text
+x86_64
+```
+
+The target therefore produces 64-bit x86 Linux binaries.
+
+The host and target can use the same CPU architecture while using completely different C libraries:
+
+```text
+HOST
+
+x86_64
+Linux
+glibc
+```
+
+```text
+TARGET
+
+x86_64
+Linux
+Musl
+```
+
+The architecture does not change during the bootstrap.
+
+The libc and toolchain environment do.
+
+---
+
+## 6.4 Target Triplet
+
+The laooOS target triplet is:
+
+```text
+x86_64-laoo-linux-musl
+```
+
+The components describe the target:
+
+```text
+x86_64
+    target architecture
+
+laoo
+    laooOS identifier
+
+linux
+    kernel/system environment
+
+musl
+    target libc
+```
+
+The triplet is used by the bootstrap compiler and Binutils to identify the target.
+
+For example:
+
+```text
+x86_64-laoo-linux-musl-gcc
+x86_64-laoo-linux-musl-g++
+x86_64-laoo-linux-musl-ld
+x86_64-laoo-linux-musl-as
+```
+
+The target triplet keeps the host and target environments separated.
+
+---
+
+## 6.5 Glibc Host / Musl Target
+
+The bootstrap crosses a libc boundary.
+
+The host uses glibc:
+
+```text
+host
+  │
+  └── glibc
+```
+
+The target uses Musl:
+
+```text
+target
+  │
+  └── Musl
+```
+
+The bridge connects them:
+
+```text
+                 HOST
+              glibc system
+                  │
+                  │
+             bridge tools
+                  │
+                  ▼
+             MUSL TARGET
+```
+
+The bridge tools themselves are host executables.
+
+Their output is target code.
+
+This means we can build the Musl system before we have a complete Musl system capable of building itself.
+
+That is the purpose of the bootstrap.
+
+---
+
+## 6.6 Entering the Target Environment
+
+Now we use the bridge to build the actual target toolchain.
+
+The order is deliberately simple:
+
+```text
+bridge Binutils
+      ↓
+Binutils for Musl
+      ↓
+GCC for Musl
+ C + C++
+      ↓
+rebuild Musl
+      ↓
+native Musl toolchain
+```
+
+The bridge is used to build each component.
+
+---
+
+### 6.6.1 Binutils — Musl Target
+
+Start with Binutils.
+
+The bridge compiler and bridge linker are used to build the target-side Binutils.
+
+Create a new build directory:
+
+```text
+--------------------------------
+$ cd "$LFS/sources/binutils-<version>"
+$ mkdir -pv build-musl
+$ cd build-musl
+--------------------------------
+```
+
+Configure:
+
+```text
+--------------------------------
+$ ../configure --prefix=/usr --target="$LFS_TGT" --with-sysroot=/ --disable-nls --disable-werror --disable-gprofng
+--------------------------------
+```
+
+The important options are:
+
+`--prefix=/usr`
+
+Install Binutils into the normal target prefix:
+
+```text
+/usr
+```
+
+With:
+
+```text
+DESTDIR="$LFS"
+```
+
+the actual installation goes into:
+
+```text
+$LFS/usr
+```
+
+This is different from the bootstrap Binutils, which lived under:
+
+```text
+$LFS/tools
+```
+
+`--target="$LFS_TGT"`
+
+Sets the target to:
+
+```text
+x86_64-laoo-linux-musl
+```
+
+The resulting tools understand the Musl target.
+
+`--with-sysroot=/`
+
+Sets the target sysroot to `/`.
+
+Inside the target filesystem, `/` is the root of the actual laooOS environment.
+
+The toolchain therefore searches locations such as:
+
+```text
+/usr/include
+/usr/lib
+/lib
+```
+
+within the target environment.
+
+`--disable-nls`
+
+Disables localization support.
+
+The bootstrap toolchain does not need translated Binutils messages.
+
+`--disable-werror`
+
+Prevents warnings from being treated as fatal errors.
+
+This makes the bootstrap less dependent on quirks of the compiler used to build it.
+
+`--disable-gprofng`
+
+Disables Gprofng.
+
+Profiling tools are not required for the core target toolchain.
+
+Build and install:
+
+```text
+--------------------------------
+$ make -j"$(nproc)"
+$ make DESTDIR="$LFS" install
+--------------------------------
+```
+
+We now have target Binutils installed under:
+
+```text
+$LFS/usr
+```
+
+---
+
+### 6.6.2 GCC — Musl Target
+
+With target Binutils available, we can build the real GCC.
+
+This GCC supports both:
+
+```text
+C
+C++
+```
+
+Create the build directory:
+
+```text
+--------------------------------
+$ cd "$LFS/sources/gcc-<version>"
+$ mkdir -pv build-musl
+$ cd build-musl
+--------------------------------
+```
+
+Configure:
+
+```text
+--------------------------------
+$ ../configure --prefix=/usr --target="$LFS_TGT" --with-sysroot=/ --disable-nls --disable-multilib --disable-werror --enable-languages=c,c++
+--------------------------------
+```
+
+### GCC configure flags
+
+`--prefix=/usr`
+
+Installs GCC into the normal target prefix.
+
+With `DESTDIR="$LFS"`:
+
+```text
+$LFS/usr
+```
+
+`--target="$LFS_TGT"`
+
+Builds GCC for:
+
+```text
+x86_64-laoo-linux-musl
+```
+
+`--with-sysroot=/`
+
+Tells GCC that the target filesystem root is `/`.
+
+The compiler will therefore look for target headers and libraries relative to the target root.
+
+`--disable-nls`
+
+Disables GCC localization support.
+
+`--disable-multilib`
+
+Builds only the x86_64 target.
+
+We do not create additional 32-bit or alternate ABI compiler libraries.
+
+`--disable-werror`
+
+Prevents compiler warnings from aborting the bootstrap build.
+
+`--enable-languages=c,c++`
+
+Enables the two languages required for the normal laooOS compiler:
+
+```text
+C
+C++
+```
+
+Unlike the bridge compiler, this is no longer a C-only bootstrap compiler.
+
+Build and install:
+
+```text
+--------------------------------
+$ make -j"$(nproc)"
+$ make DESTDIR="$LFS" install
+--------------------------------
+```
+
+Check the compiler:
+
+```text
+--------------------------------
+$ "$LFS/usr/bin/$LFS_TGT-gcc" --version
+$ "$LFS/usr/bin/$LFS_TGT-g++" --version
+--------------------------------
+```
+
+The compiler now belongs to the target toolchain:
+
+```text
+GCC
+ ├── C
+ └── C++
+       │
+       ▼
+x86_64-laoo-linux-musl
+```
+
+---
+
+### 6.6.3 Rebuild Musl
+
+The original Musl installation was required to bootstrap the bridge.
+
+Now that the target Binutils and GCC exist, Musl can be rebuilt using the new target toolchain.
+
+This replaces the initial bootstrap libc with the version built by the new toolchain.
+
+Enter the Musl source tree:
+
+```text
+--------------------------------
+$ cd "$LFS/sources/musl-<version>"
+--------------------------------
+```
+
+Clean the previous build:
+
+```text
+--------------------------------
+$ make distclean
+--------------------------------
+```
+
+Configure again:
+
+```text
+--------------------------------
+$ ./configure --prefix=/usr --target="$LFS_TGT"
+--------------------------------
+```
+
+Build:
+
+```text
+--------------------------------
+$ make -j"$(nproc)"
+--------------------------------
+```
+
+Install into the target root:
+
+```text
+--------------------------------
+$ make DESTDIR="$LFS" install
+--------------------------------
+```
+
+Musl is now rebuilt using the target toolchain.
+
+The bootstrap transition is complete:
+
+```text
+HOST
+glibc
+  │
+  ▼
+BRIDGE
+GCC + Binutils
+  │
+  ▼
+TARGET BINUTILS
+  │
+  ▼
+TARGET GCC
+C + C++
+  │
+  ▼
+REBUILT MUSL
+  │
+  ▼
+NATIVE MUSL TOOLCHAIN
+```
+
+The bridge got us into the target environment.
+
+The target Binutils and GCC now provide the foundation for building the rest of laooOS.
+
+From here onward, the build can progressively move away from the host and toward a self-hosting Musl system.
+
 
 ---
 

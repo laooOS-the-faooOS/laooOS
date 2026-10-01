@@ -1,2 +1,1143 @@
+# laooOS — Building an Experimental Linux System
+
+> An experimental Linux system built from source.
+>
+> Keep it small. Make it fast. Break things. Fix them. Repeat.
+
+---
+
+# Table of Contents
+
+* [Preface](#preface)
+* [I. Introduction](#i-introduction)
+
+  * [1. What is laooOS?](#1-what-is-laooos)
+  * [2. The Three laooOSes](#2-the-three-laoooses)
+  * [3. One Thing All laooOS Builds Have in Common](#3-one-thing-all-laooos-builds-have-in-common)
+  * [4. Why Mold?](#4-why-mold)
+  * [5. Optimization](#5-optimization)
+  * [6. Musl](#6-musl)
+  * [7. Build It Yourself](#7-build-it-yourself)
+  * [8. Experimental by Design](#8-experimental-by-design)
+  * [9. The Three Directions](#9-the-three-directions)
+  * [10. The laooOS Idea](#10-the-laooos-idea)
+* [II. Before the Build](#ii-before-the-build)
+
+  * [2. Preparing the Host](#2-preparing-the-host)
+  * [3. Creating the Build Environment](#3-creating-the-build-environment)
+  * [4. Getting the Sources](#4-getting-the-sources)
+* [III. Building the Bootstrap System](#iii-building-the-bootstrap-system)
+* [IV. The Core Toolchain](#iv-the-core-toolchain)
+* [V. The C Library](#v-the-c-library)
+* [VI. Building the Base System](#vi-building-the-base-system)
+* [VII. The laooOS System](#vii-the-laooos-system)
+* [VIII. Optimization](#viii-optimization)
+* [IX. Mainstream laooOS](#ix-mainstream-laooos)
+* [X. GCC laooOS](#x-gcc-laooos)
+* [XI. Tiny laooOS](#xi-tiny-laooos)
+* [XII. Testing](#xii-testing)
+* [XIII. Experiments](#xiii-experiments)
+* [XIV. Building the Final System](#xiv-building-the-final-system)
+* [XV. Beyond the Base System](#xv-beyond-the-base-system)
+* [Appendices](#appendices)
+
+---
+
+# Preface
+
+laooOS is an experimental Linux system built from source.
+
+The project is not trying to be another giant Linux distribution.
+
+Instead, it is a place to experiment with:
+
+* Linux
+* compilers
+* libc
+* linkers
+* optimization
+* system design
+* minimal userspace
+* building everything from source
+
+The build process is part of the project.
+
+Things will break.
+
+That's fine.
+
+Fix them, learn from them, and keep going.
+
+---
+
+# I. Introduction
+
+## 1. What is laooOS?
+
+laooOS is an experimental Linux system built from source.
+
+The idea is simple:
+
+```text
+Build the system ourselves.
+Keep it small.
+Make it fast.
+Experiment with the toolchain.
+Remove things we don't need.
+```
+
+laooOS isn't trying to follow the traditional Linux distribution model.
+
+It's more like a playground for experimenting with the entire system, from the compiler and linker all the way to userspace.
+
+The project has several different directions instead of one fixed "correct" way to build the system.
+
+The three main ones are:
+
+* **Mainstream laooOS**
+* **GCC laooOS**
+* **Tiny laooOS**
+
+---
+
+## 2. The Three laooOSes
+
+### 2.1 Mainstream laooOS
+
+This is the LLVM/Clang version of laooOS.
+
+The idea is to use LLVM as the main compiler environment and see how far we can push a small, modern Linux system with it.
+
+```text
+LLVM/Clang + Musl + Mold
+```
+
+This version is focused on experimenting with:
+
+* Clang
+* LLVM tools
+* modern compiler features
+* aggressive optimization
+* custom toolchain layouts
+* a lightweight Musl system
+
+It doesn't have to follow normal distribution conventions.
+
+---
+
+### 2.2 GCC laooOS
+
+GCC laooOS takes the same idea in a different direction.
+
+Instead of making LLVM the center of the system, GCC becomes the main compiler.
+
+```text
+GCC + Musl + Mold
+```
+
+This version is an experiment in building a small and fast Musl system around GCC.
+
+The goal is to see how far we can push a GCC-based system while keeping the rest of the system lightweight.
+
+---
+
+### 2.3 Tiny laooOS
+
+Tiny laooOS is where we start removing things.
+
+The question is basically:
+
+> "How little do we actually need?"
+
+Tiny laooOS is an experiment in reducing the system down to the important parts.
+
+The goals are:
+
+```text
+less software
+less dependencies
+less disk space
+less memory usage
+less background stuff
+```
+
+while still keeping a useful Linux environment.
+
+Tiny laooOS can also act as a base for other experiments.
+
+---
+
+## 3. One Thing All laooOS Builds Have in Common
+
+**Mold.**
+
+Mold is the main linker of laooOS.
+
+The linker is normally something most users never think about.
+
+When building an entire operating system from source, however, it gets used constantly.
+
+The basic idea is:
+
+```text
+compiler
+   |
+   v
+object files
+   |
+   v
+  mold
+   |
+   v
+program
+```
+
+The compiler can change between laooOS profiles.
+
+The linker philosophy stays the same.
+
+---
+
+## 4. Why Mold?
+
+Because waiting for the linker is boring.
+
+laooOS is an experimental project, so build speed matters.
+
+When rebuilding hundreds or thousands of files, the linker gets used again and again.
+
+Mold gives the project a fast linker without forcing the entire system to use one particular compiler.
+
+This means both the LLVM and GCC versions can share the same basic linker setup.
+
+---
+
+## 5. Optimization
+
+Optimization is another major part of laooOS.
+
+We don't just want:
+
+```text
+"it compiles"
+```
+
+We want to experiment with:
+
+```text
+"how far can we push it?"
+```
+
+Depending on the package and profile, this can include:
+
+* `-O3`
+* `-Ofast`
+* CPU-specific tuning
+* vectorization
+* loop optimization
+* aggressive inlining
+* interprocedural optimization
+* linker optimization
+* LTO
+* PGO
+* size optimization
+* reduced runtime overhead
+
+Not every flag belongs everywhere.
+
+Sometimes an aggressive optimization makes a build slower, larger, or less reliable.
+
+That's part of the experiment.
+
+laooOS is about testing these things instead of blindly copying a distribution's default flags.
+
+---
+
+## 6. Musl
+
+The main libc direction of laooOS is **Musl**.
+
+Musl fits the project because it is small, simple, and portable.
+
+It also makes the toolchain experiments more interesting.
+
+Instead of only building around the traditional:
+
+```text
+GCC + glibc
+```
+
+combination, laooOS experiments with:
+
+```text
+GCC   + Musl
+Clang + Musl
+```
+
+and eventually builds the system around the toolchain created during the project.
+
+---
+
+## 7. Build It Yourself
+
+Most Linux distributions give you a finished system.
+
+laooOS starts with the opposite idea:
+
+> What happens if we build the system ourselves?
+
+The general progression is:
+
+```text
+Host
+  |
+  v
+Bootstrap
+  |
+  v
+Compiler
+  |
+  v
+libc
+  |
+  v
+Libraries
+  |
+  v
+Userspace
+  |
+  v
+laooOS
+```
+
+The host is only the starting point.
+
+As the build progresses, more of the final system is produced using the new toolchain.
+
+---
+
+## 8. Experimental by Design
+
+laooOS is allowed to change.
+
+There isn't one sacred architecture that can never be touched.
+
+A build might use GCC today and Clang tomorrow.
+
+A package might be removed.
+
+A library might be replaced.
+
+A compiler flag might make the system faster.
+
+Or it might completely break the build.
+
+That's fine.
+
+The project is experimental.
+
+The build process itself is part of the project.
+
+---
+
+## 9. The Three Directions
+
+The three profiles are basically three different questions.
+
+### Mainstream laooOS
+
+> "What can we do with a modern LLVM-based system?"
+
+### GCC laooOS
+
+> "What can we do with GCC and Musl?"
+
+### Tiny laooOS
+
+> "How little can we get away with?"
+
+They share the same basic spirit, but they don't have to end up identical.
+
+---
+
+## 10. The laooOS Idea
+
+laooOS is basically an experiment:
+
+```text
+Build Linux ourselves.
+Pick our own tools.
+Remove what we don't need.
+Optimize what we keep.
+Break things.
+Fix them.
+Repeat.
+```
+
+There is no requirement for laooOS to look like a normal distribution.
+
+If something works better, we try it.
+
+If something is unnecessary, we remove it.
+
+If something interesting happens, we keep experimenting with it.
+
+That's laooOS.
+
+---
+
+# II. Before the Build
+
+Before we build laooOS, we need a clean host and a clean build environment.
+
+The host is only used to bootstrap the system.
+
+The goal is to eventually build laooOS using its own toolchain.
+
+---
+
+## 2. Preparing the Host
+
+A 64-bit Linux host is required.
+
+The distribution does not matter much.
+
+It only needs the tools required to build the initial system.
+
+### 2.1 Host system requirements
+
+The host should have:
+
+```text
+x86_64 CPU
+Working compiler
+Binutils
+Make
+Bash
+Python
+Basic Unix utilities
+Internet access
+Enough disk space
+Enough RAM for large builds
+```
+
+---
+
+### 2.2 Required packages
+
+Install the basic build tools provided by your distribution.
+
+Common requirements include:
+
+```text
+gcc
+binutils
+make
+cmake
+ninja
+python
+perl
+pkgconf
+git
+tar
+xz
+gzip
+bzip2
+patch
+diffutils
+coreutils
+findutils
+sed
+awk
+grep
+aria2c
+```
+
+Some tools are only needed during specific parts of the build.
+
+The final laooOS system does not have to contain all of them.
+
+---
+
+### 2.3 Disk space
+
+Source builds require considerably more space than the final system.
+
+GCC and LLVM can use a particularly large amount of storage during compilation.
+
+laooOS keeps the build under:
+
+```text
+/mnt/lfs
+```
+
+Create the basic directories:
+
+```text
+--------------------------------
+$ mkdir -pv /mnt/lfs
+$ mkdir -pv /mnt/lfs/sources
+--------------------------------
+```
+
+---
+
+### 2.4 Memory requirements
+
+Large packages can consume a lot of memory when built in parallel.
+
+Check the system:
+
+```text
+--------------------------------
+$ nproc
+$ free -h
+--------------------------------
+```
+
+For example:
+
+```text
+--------------------------------
+$ make -j8
+--------------------------------
+```
+
+If the machine starts swapping heavily, reduce the number of parallel jobs.
+
+---
+
+### 2.5 CPU considerations
+
+laooOS currently targets x86_64.
+
+CPU-specific optimization is applied later in the build.
+
+The bootstrap environment should remain stable first.
+
+Once the compiler works, more aggressive optimization can be introduced.
+
+---
+
+# 3. Creating the Build Environment
+
+The main build directory is:
+
+```text
+/mnt/lfs
+```
+
+Set `LFS` to point to it:
+
+```text
+--------------------------------
+$ export LFS=/mnt/lfs
+$ echo $LFS
+/mnt/lfs
+--------------------------------
+```
+
+---
+
+## 3.1 Creating $LFS
+
+Create the root of the new system:
+
+```text
+--------------------------------
+$ mkdir -pv "$LFS"
+--------------------------------
+```
+
+---
+
+## 3.2 Creating the sources directory
+
+All downloads and source trees are kept here:
+
+```text
+--------------------------------
+$ mkdir -pv "$LFS/sources"
+--------------------------------
+```
+
+The source tree should remain inside `$LFS/sources`.
+
+This keeps the build organized and makes it easier to restart individual packages.
+
+---
+
+## 3.3 Creating the build user
+
+Building as root is avoided whenever possible.
+
+Create a dedicated build group and user:
+
+```text
+--------------------------------
+# groupadd lfs
+# useradd -s /bin/bash -g lfs -m -k /dev/null lfs
+# passwd lfs
+--------------------------------
+```
+
+---
+
+## 3.4 Setting ownership
+
+Give the build user ownership of the build directory:
+
+```text
+--------------------------------
+# chown -R lfs:lfs "$LFS"
+--------------------------------
+```
+
+---
+
+## 3.5 Setting environment variables
+
+Switch to the build user:
+
+```text
+--------------------------------
+# su - lfs
+--------------------------------
+```
+
+Set the main build variables:
+
+```text
+--------------------------------
+$ export LFS=/mnt/lfs
+$ export LC_ALL=C
+$ export LFS_TGT=x86_64-laoo-linux-musl
+--------------------------------
+```
+
+The target triplet may change depending on the toolchain being built.
+
+Keep the build environment explicit.
+
+---
+
+## 3.6 Setting PATH
+
+The temporary laooOS tools will be installed under `$LFS/tools`.
+
+Put them before the host tools:
+
+```text
+--------------------------------
+$ mkdir -pv "$LFS/tools"
+$ export PATH="$LFS/tools/bin:$PATH"
+--------------------------------
+```
+
+Check the result:
+
+```text
+--------------------------------
+$ echo "$PATH"
+--------------------------------
+```
+
+---
+
+## 3.7 Build flags
+
+laooOS is an experimental optimization project.
+
+The exact flags can change between packages, but the general direction is aggressive optimization.
+
+A starting environment can look like:
+
+```text
+--------------------------------
+$ export CFLAGS="-O3 -pipe"
+$ export CXXFLAGS="$CFLAGS"
+$ export LDFLAGS="-fuse-ld=mold"
+--------------------------------
+```
+
+Later stages can experiment with stronger options such as:
+
+```text
+-Ofast
+-march=
+-mtune=
+-ftree-vectorize
+-funroll-loops
+-flto
+```
+
+Do not assume that every aggressive flag improves every package.
+
+---
+
+# 4. Getting the Sources
+
+All source archives belong in:
+
+```text
+$LFS/sources
+```
+
+Enter the directory:
+
+```text
+--------------------------------
+$ cd "$LFS/sources"
+--------------------------------
+```
+
+---
+
+## 4.1 Source mirrors
+
+Sources should come from the upstream project or a trusted mirror.
+
+Keep the original archives.
+
+Do not modify downloaded source archives directly.
+
+---
+
+## 4.2 Downloading with aria2c
+
+laooOS uses `aria2c` for fast and resumable downloads.
+
+A typical configuration is:
+
+```text
+--------------------------------
+$ aria2c -x15 -s15 -k1M -c
+--------------------------------
+```
+
+For multiple packages, put the URLs into an input file.
+
+```text
+--------------------------------
+$ joe sources.list
+--------------------------------
+```
+
+Then download everything:
+
+```text
+--------------------------------
+$ aria2c -x15 -s15 -k1M -c -i sources.list
+--------------------------------
+```
+
+This keeps the download command short and makes the source list easy to reuse.
+
+---
+
+## 4.3 Source checksums
+
+Verify downloaded archives before extracting them.
+
+For SHA-256:
+
+```text
+--------------------------------
+$ sha256sum package-version.tar.xz
+--------------------------------
+```
+
+Compare the result with the checksum published by the upstream project.
+
+A different checksum means the archive should not be trusted until the difference is understood.
+
+---
+
+## 4.4 Extracting sources
+
+Extract packages directly inside `$LFS/sources`:
+
+```text
+--------------------------------
+$ cd "$LFS/sources"
+$ tar -xf package-version.tar.xz
+--------------------------------
+```
+
+This should produce a normal source directory:
+
+```text
+--------------------------------
+$ ls
+package-version
+package-version.tar.xz
+--------------------------------
+```
+
+---
+
+## 4.5 Keeping the source tree clean
+
+Keep source archives and source trees inside `$LFS/sources`.
+
+Do not scatter build trees around the host.
+
+When a package supports an out-of-tree build, keep the build directory inside the package's source area:
+
+```text
+--------------------------------
+$ mkdir -pv package-version/build
+$ cd package-version/build
+--------------------------------
+```
+
+If a package needs to be rebuilt from a clean source tree, remove the extracted directory and extract the original archive again.
+
+The goal is simple:
+
+```text
+sources stay in sources
+tools stay in tools
+the host stays the host
+laooOS stays inside $LFS
+```
+
+---
+
+# III. Building the Bootstrap System
+
+## 5. The Bootstrap Toolchain
+
+### 5.1 Why a bootstrap toolchain?
+
+### 5.2 Bootstrap compiler
+
+### 5.3 Bootstrap binutils
+
+### 5.4 Bootstrap linker
+
+### 5.5 Bootstrap libc
+
+### 5.6 Building a temporary compiler
+
+---
+
+## 6. The Bootstrap Environment
+
+### 6.1 Host compiler
+
+### 6.2 Target compiler
+
+### 6.3 Target architecture
+
+### 6.4 Target triplet
+
+### 6.5 Glibc host / Musl target
+
+### 6.6 Entering the target environment
+
+---
+
+# IV. The Core Toolchain
+
+## 7. Binutils
+
+### 7.1 Building binutils
+
+### 7.2 Installing binutils
+
+### 7.3 Testing the linker tools
+
+## 8. GCC
+
+### 8.1 Building the GCC bridge
+
+### 8.2 GCC and Musl
+
+### 8.3 Building the target GCC
+
+### 8.4 libgcc
+
+### 8.5 libstdc++
+
+### 8.6 GCC runtime libraries
+
+## 9. LLVM / Clang
+
+### 9.1 Building LLVM
+
+### 9.2 Building Clang
+
+### 9.3 LLVM runtime components
+
+### 9.4 Clang and Musl
+
+### 9.5 LLVM toolchain layout
+
+## 10. Mold
+
+### 10.1 Building Mold
+
+### 10.2 Installing Mold
+
+### 10.3 Making Mold the default linker
+
+### 10.4 Testing Mold
+
+### 10.5 Mold in the final system
+
+---
+
+# V. The C Library
+
+## 11. Musl
+
+### 11.1 Building Musl
+
+### 11.2 Installing Musl
+
+### 11.3 crt objects
+
+### 11.4 Dynamic linker
+
+### 11.5 Musl GCC specs
+
+### 11.6 Testing the new libc
+
+---
+
+# VI. Building the Base System
+
+## 12. Essential Libraries
+
+### 12.1 Zlib
+
+### 12.2 Zstd
+
+### 12.3 Libdeflate
+
+### 12.4 Libarchive
+
+### 12.5 Other base libraries
+
+## 13. Build Tools
+
+### 13.1 CMake
+
+### 13.2 Ninja
+
+### 13.3 Meson
+
+### 13.4 pkgconf
+
+### 13.5 Autotools
+
+### 13.6 Python build tools
+
+## 14. Core Userspace
+
+### 14.1 BusyBox
+
+### 14.2 Core utilities
+
+### 14.3 Shell
+
+### 14.4 File utilities
+
+### 14.5 Text utilities
+
+### 14.6 Process utilities
+
+---
+
+# VII. The laooOS System
+
+## 15. Linux
+
+### 15.1 Kernel sources
+
+### 15.2 Kernel configuration
+
+### 15.3 Building the kernel
+
+### 15.4 Installing the kernel
+
+### 15.5 Modules
+
+### 15.6 Firmware
+
+## 16. Init
+
+### 16.1 Why not systemd?
+
+### 16.2 OpenRC
+
+### 16.3 Alternative init systems
+
+### 16.4 Boot sequence
+
+### 16.5 Services
+
+## 17. Device Management
+
+### 17.1 /dev
+
+### 17.2 Device discovery
+
+### 17.3 udev alternatives
+
+### 17.4 Firmware loading
+
+## 18. Networking
+
+### 18.1 Network configuration
+
+### 18.2 Ethernet
+
+### 18.3 Wi-Fi
+
+### 18.4 DNS
+
+### 18.5 SSH
+
+---
+
+# VIII. Optimization
+
+## 19. Compiler Optimization
+
+### 19.1 O2
+
+### 19.2 O3
+
+### 19.3 Ofast
+
+### 19.4 CPU tuning
+
+### 19.5 Vectorization
+
+### 19.6 Loop optimization
+
+### 19.7 Function inlining
+
+### 19.8 Interprocedural optimization
+
+## 20. Link-Time Optimization
+
+### 20.1 LTO
+
+### 20.2 ThinLTO
+
+### 20.3 LTO trade-offs
+
+### 20.4 PGO
+
+### 20.5 When not to use LTO
+
+## 21. Linker Optimization
+
+### 21.1 Mold
+
+### 21.2 Linker flags
+
+### 21.3 Section handling
+
+### 21.4 Dead code elimination
+
+## 22. Size Optimization
+
+### 22.1 Reducing dependencies
+
+### 22.2 Stripping
+
+### 22.3 Smaller binaries
+
+### 22.4 Static vs dynamic linking
+
+---
+
+# IX. Mainstream laooOS
+
+## 23. Building Mainstream laooOS
+
+### 23.1 LLVM toolchain
+
+### 23.2 Clang
+
+### 23.3 Musl
+
+### 23.4 Mold
+
+### 23.5 Base userspace
+
+### 23.6 Final system
+
+## 24. Mainstream laooOS Environment
+
+### 24.1 Compiler environment
+
+### 24.2 Package building
+
+### 24.3 Runtime environment
+
+### 24.4 Testing
+
+---
+
+# X. GCC laooOS
+
+## 25. Building GCC laooOS
+
+### 25.1 GCC bootstrap
+
+### 25.2 GCC bridge
+
+### 25.3 GCC + Musl
+
+### 25.4 Final GCC
+
+### 25.5 Mold
+
+### 25.6 Final system
+
+## 26. GCC laooOS Environment
+
+### 26.1 GCC configuration
+
+### 26.2 Runtime libraries
+
+### 26.3 Package building
+
+### 26.4 Testing
+
+---
+
+# XI. Tiny laooOS
+
+## 27. Designing Tiny laooOS
+
+### 27.1 What can be removed?
+
+### 27.2 Minimal dependencies
+
+### 27.3 Minimal userspace
+
+### 27.4 Minimal services
+
+## 28. Building Tiny laooOS
+
+### 28.1 Minimal toolchain
+
+### 28.2 Musl
+
+### 28.3 Mold
+
+### 28.4 Kernel
+
+### 28.5 Userspace
+
+### 28.6 Booti
+
+
 # laooOS
 My laooOS project
